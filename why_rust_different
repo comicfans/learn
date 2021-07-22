@@ -195,11 +195,79 @@ second allocation failed. but the question is such leak is also easy to introduc
 function need to allocate many times, such problem became harder. what makes it worse is maintainable,
 since the cleanup function should be exactly same order as allocation (otherwise such cleanup table can't
 be shared from different failure point), developer needs to be very careful to keep them
-in sync when adjust order of allocation. break this rule may lead to new memory leak/corruption bugs.
-In C++ world, RAII idom is used to address such problem. ideal behind RAII is that destructor is granted
-to run at scope end, so you can put clean 
+in sync when adjust order of allocation. break this rule may lead to leak/corruption/double free bugs.
+RAII (as mentioned by Bart Van Assche), is C++ idom to address such problem, the trick is that destructor
+will be run exactly when object exit scope, no matter if the scope is exited by normal control flow
+or early error return. similar mechanisum (run function at scope exit) is borrowed by many other languages
+for example java 1.7 try-with-resource, C# 8 using, go defer function, and also rust drop (some sort of),
+even C commitee is looking into adding defer function to implement RAII like idom.
+(http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2542.pdf)
+From my personal view, before rust lang, I would say C++ destructor approach is the best to do automatic
+resource management, better than Java/C# or go defer, I list my reasons here:
+
+Java/C# early versions don't have such semantic, source management is done by try/catch/finally, 
+new mechanism needs code migration, and force developer to make resource type inherit particular interface,
+and again, developers can forget them, especially Java/C# being GC language. 
 
 
-There're many new launguages poped in recent years, but linux kernel development have only a few options,  
-it must be no GC, low leveled, and most importantly : much better than C. 
+defer function have semantic confusions : 
+the defer function defined point(in-between code) must be different to 
+execute point (function end, or scope end), but what values do the argument which used by defer function hold? 
+do they 'capture' values at define point , or do they use most-written new value ? 
+go prefer previous (https://tour.golang.org/flowcontrol/12)
+```
+The deferred call's arguments are evaluated immediately, but the function call is not executed until the surrounding function returns.
+```
+so 
+```
+    package main
+    import "fmt"
+    func main() {
+         var a = "abc";
+         defer fmt.Println("a is",a, "while running defer");
+         a = "xyz";
+         fmt.Println("a is ", a, "firstly")
+    }
+
+```
+will print 
+
+```
+a is xyz firstly
+a is abc while running defer
+```
+because used in resource auto cleanup scenario, this policy implicits that
+the variable which hold resource can't changed to point to new resource after
+defer function defined,or you have to define new defer function everytime 
+new resource is assigned.
+
+
+C porposed defer function also have such confusions:
+
+```
+The results from 387 responses show a 2:1 preference for the value being read at the time the
+deferred statements are executed (66.9%) rather than when the defer statement encountered (33.1%). One interesting thing to note is that of respondents who gave a rationale for their vote,
+respondents known to have a strong C++ background seemed to gravitate towards using the
+value when the defer statement is encountered, which suggests there may be some interesting
+implicit bias.
+A general solution to this problem is the introduction of lambdas to the C language [13] with both
+copy and reference semantics. A more specific solution is to use a second defer statement
+syntax which supplies an identifier list of variables to capture by value.
+
+```
+
+C++ RAII is cleaner because created resource saved as instance member,no semantic confusion during destructor. 
+if resource cleaning point match scope, I think RAII should works great even in kernel context (my opinion), 
+but if dynamic management happened, RAII have its own problem. for example 
+
+```
+unique_ptr<Resource> resource;
+
+transfer_and_reset_resource(resource);
+
+```
+since resource need to be transfered and cleanup inside transfer_and_reset_resource function,
+we cannot use RAII type (Resource type here) as stack value variable, must wrap
+it as smart pointer (unique_ptr here), but problem is that after transfer_and_reset is called,
+resource already became invalid, 
 

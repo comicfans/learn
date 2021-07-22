@@ -122,18 +122,82 @@ code, for kernel development, it brings easily low-level access, but also too ea
  
  I grep the kernel git log from 2.6.12-rc2(2005-Apr 1da177e4c3f) to about 5.13-rc6 (2021-Jun 6b00bc639) by
 ```
-git log --grep=use --grep=after --grep=free --all-match --oneline | wc -l
+git log --grep=leak --grep=error --all-match --oneline | wc -l
 ```
-got 9987 result, you may also grep for "double free" or "leak" to know how many memory safely bugs introduced
-and fixed by linux kernel. please note, some of these bugs are logic related (that means they can also 
-happen even written in other languages), but lack of memmory safety in C definitly makes things worse.
-with kernel high quailty commit message's help, even not kernel developer,
-we can still understand how these bugs happened, and fixed. here I pick 'leak' bug because they're 
-easiest to understand.
+got 4626 result, you may also grep for "double free" (2234) or "use after free" (9987) to know how many memory 
+safely bugs introduced and fixed in linux kernel. please note, some of these bugs are logic related ( 
+even written in other languages it can still happen), but lack of memmory safety in C definitly be the cause
+of most memory errors. as a side note, tor(which originally written in C) developers share their view 
+in https://blog.torproject.org/announcing-arti
+```
+Since 2016, we've been tracking all the security bugs that we've found in Tor, and it turns out that 
+at least half of them were specifically due to mistakes that should be impossible in safe Rust code
+```
 
 
+These catalog of bugs share a common property: they're so "trivial", even not being
+kernel developer, we can easily understand why these piece of code is incorrect (with help of commit), 
+and they're also so error-prone,even experience kernel developers continuous introduce such bugs. 
+here I pick a leak fix as example
 
+```
+619fee9eb13 
 
+ net: fec: fix the potential memory leak in fec_enet_init()
+
+    If the memory allocated for cbd_base is failed, it should
+    free the memory allocated for the queues, otherwise it causes
+    memory leak.
+
+    And if the memory allocated for the queues is failed, it can
+    return error directly.
+
+```
+
+Let's pick the importand part out to see what happened:
+
+code before fix:
+
+```
+        fec_enet_alloc_queue(ndev);
+...
+        cbd_base = dmam_alloc_coherent(&fep->pdev->dev, bd_size, &bd_dma,
+                                       GFP_KERNEL);
+        if (!cbd_base) {
+               return -ENOMEM;
+        }
+
+```
+
+code after fix:
+```
+        ret = fec_enet_alloc_queue(ndev);
+        if (ret)
+                return ret;
+
+...
+
+        cbd_base = dmam_alloc_coherent(&fep->pdev->dev, bd_size, &bd_dma,
+                                       GFP_KERNEL);
+        if (!cbd_base) {
+                ret = -ENOMEM;
+                goto free_queue_mem;
+        }
+...
+free_queue_mem:
+       fec_enet_free_queue(ndev);
+       return ret;
+
+```
+
+seems easy to fix, right ? code have two allocations, but forget to deallocate first one if the 
+second allocation failed. but the question is such leak is also easy to introduce, suppose similar
+function need to allocate many times, such problem became harder. what makes it worse is maintainable,
+since the cleanup function should be exactly same order as allocation (otherwise such cleanup table can't
+be shared from different failure point), developer needs to be very careful to keep them
+in sync when adjust order of allocation. break this rule may lead to new memory leak/corruption bugs.
+In C++ world, RAII idom is used to address such problem. ideal behind RAII is that destructor is granted
+to run at scope end, so you can put clean 
 
 
 There're many new launguages poped in recent years, but linux kernel development have only a few options,  

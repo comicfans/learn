@@ -1,0 +1,32 @@
+as a new language , rust gains lots of attaction, there're also many projects, which historic using C as primary language ,
+begin to migrate to rust (librsvg/curl/tor). The most interesting project is definitely "bring rust to linux kernel development". 
+what makes it interesting does not only because it's driven by google (Google found support developers who're developing such project), 
+but also due to Linus' personal taste (and maybe others) and some technical reasons, Linux kernel never accept second alternative
+programming language other than C(Makefile/perl and some other DSL only used as helper script), even C++, which is (almost) a superset of C.
+
+so first question is , why people want to use another language other than C? it's being used for kernel development for years. 
+short answer is : it is so easy to get it wrong, but we'll skip this topic and foll
+
+Linus personally hate C++, that's not a secret, he explain many times "C++ is horrible language". 
+
+this time is no exception. if you're 
+following this long kernel mailing list (https://lore.kernel.org/ksummit/CANiq72kF7AbiJCTHca4A0CxDDJU90j89uh80S3pDqDt7-jthOg@mail.gmail.com/)
+which starts at 2021-06-25, you'll find that Linus keeps silent at first, but I'm definitely sure he's watch this thread all the time.
+because 2021-07-07 Bart Van Assche 
+
+
+
+
+
+
+
+, even for the most intellegent people who use it to do years kernel developing. I grep 
+the kernel git log from 2.6.12-rc2(2005-Apr 1da177e4c3f) to about 5.13-rc6 (2021-Jun 6b00bc639) by
+```
+git log --grep=use --grep=after --grep=free --all-match --oneline | wc -l
+```
+got 9987 result, that means, 
+
+There're many new launguages poped in recent years, but linux kernel development have only a few options,  
+it must be no GC, low leveled, and most importantly : much better than C. 
+

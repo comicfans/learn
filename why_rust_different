@@ -212,7 +212,7 @@ and again, developers can forget them, especially Java/C# being GC language.
 
 defer function have semantic confusions : 
 the defer function defined point(in-between code) must be different to 
-execute point (function end, or scope end), but what values do the argument which used by defer function hold? 
+execute point (function end, or scope end), but what values do the argument used by defer function hold? 
 do they 'capture' values at define point , or do they use most-written new value ? 
 go prefer previous (https://tour.golang.org/flowcontrol/12)
 ```
@@ -224,21 +224,22 @@ so
     import "fmt"
     func main() {
          var a = "abc";
-         defer fmt.Println("a is",a, "while running defer");
+         defer fmt.Println("clean resource",a, "while running defer");
          a = "xyz";
-         fmt.Println("a is ", a, "firstly")
+         fmt.Println("resource is", a);
     }
 
 ```
 will print 
 
 ```
-a is xyz firstly
-a is abc while running defer
+resource is xyz
+clean resource abc while running defer
 ```
  this policy implicits that
 the variable which hold resource can't changed to point to new resource after
-defer function defined,or you have to define new defer function everytime 
+defer function defined(otherwise you're cleaning incorrect resource),
+or you have to define new defer function everytime 
 new resource is assigned.
 
 
@@ -260,7 +261,7 @@ C++ RAII idom using constructor/destructor to acquire/release resource, acquired
 kept as member, so it has no confusion during cleanup, and more important, resource management
 auto keep sync as RAII object lifetime, makes the resource abstraction straightforward. 
 this can implements simple "cleanup at scope exit" behaivor,
-also can implement more flexiable resource management by passing RAII object around.
+also can implement more flexiable resource management by manage RAII object lifetime .
 for example
 
 ```
@@ -298,22 +299,73 @@ then
 unique_ptr<ComplexResource> resouce = return_resource();
 ComplexResource temp = *source
 ```
-lead a double free (or double deallocate) problem, because C++ use copy semantic,
+lead a double free problem, because C++ use copy semantic,
 temp var also holding resouce ,and they both try to cleanup same thing, twice.
-actually copy semantic bring another confusing point: unique_ptr holding 
-its internal pointer, why return_resource function can return unique_ptr?
-doesn't this trigger double free bug too ? the answser is no,  unique_ptr
-forbid copy contructor so you can not copy unique_ptr to another variable
+this brings another confusing point: unique_ptr seems being copied multi times,
+doesn't this also trigger double free bug  ? the answser is no,  unique_ptr
+forbid copy so you won't copy unique_ptr even by accident
 (thus it prevent unexpected copy to lead double free bug)
 ```
-unique_ptr<ComplexResource> p1;
+unique_ptr<ComplexResource> p1(new ComplexResource());
 unique_ptr<ComplexResource> p2 = p1; //won't compile, error
 ```
 
 but this raises other questions, if it can't be copied,
 how can return_resource return it and why use_resource can assign returned value
-from return_resource to variable ? the answser is C++ have many 'tricky' rules,
-makes these code valid (although such rules doesn't match programmers straightforward 
-view of code very much, see RVO/move constructor/rvalue)
+from return_resource to variable ? the answser is C++ have many other 'tricky' rules,
+these assignments is not 'copy', they're 'elision-copy' and 'move assignment',
+which makes these code correct (although such rules doesn't match programmers 
+straightforward view of code very much)
+
+unique_ptr also have problems, C++ happily accept code like 
+```
+unique_ptr<ComplexResource> p1(new ComplexResource());
+delete p1.get();
+```
+some C++ developer may argue that I shouldn't use manual delete on pointer
+which managed by smart pointer, but unforunitely, such rule is not enforced by compiler
+and real world codebase are much more complex, such error pair may be in completely
+different files, not so easy to spot. especially when you have many legcy code which
+only accept raw pointer.
+
+now let's see why rust is different for auto resource management. at first,
+its alike C++ RAII, constructor acquire resource, destructor (drop) cleanup it,
+but rust non-POD (in C++ term) types use 'move semantic', which means
+if assignment of RAII type in rust are always transfer (without C++ whole bunch
+of dark rules), so another wrapper (unique_ptr in C++ example) to 
+control RAII object lifetime is needless.and interesting part came for
+manually object destroy, rust default destruct object at scope end, but if
+you want to destroy object early, you call
+
+```
+ComplexResource resource = return_resource();
+drop(resource);
+```
+
+firstly its alike calling destructor manullay or unique_ptr.reset,
+but they're different, calling destructor manully on stack variable in C++
+leads double free (alike) bugs, but rust
+knows you don't need to run destructor again because you already drop it.
+and this is also different to C++ unique_ptr.reset, since unique_ptr only
+knows not to call destructor again because its internal pointer is null
+at runtime, but rust knows such behaivor at compile time, without any runtime
+bookmark ! and future more, in C++, you may access nullptr after reset unique_ptr
+by acceident 
+```
+unique_ptr<ComplexResource> res= return_resource();
+res.reset();
+use_res_again(res);  // still compile, even incorrect
+```
+
+but rust compiler find your mistake at compile time!
+```
+ComplexResource res = return_resource();
+drop(res);
+use_res_again(res); ------------> rust won't compile, it tells you res already moved in drop call so you can't use it anymore
+```
+That 
+
+
+
 
 

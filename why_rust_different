@@ -236,7 +236,7 @@ will print
 a is xyz firstly
 a is abc while running defer
 ```
-because used in resource auto cleanup scenario, this policy implicits that
+ this policy implicits that
 the variable which hold resource can't changed to point to new resource after
 defer function defined,or you have to define new defer function everytime 
 new resource is assigned.
@@ -256,18 +256,64 @@ syntax which supplies an identifier list of variables to capture by value.
 
 ```
 
-C++ RAII is cleaner because created resource saved as instance member,no semantic confusion during destructor. 
-if resource cleaning point match scope, I think RAII should works great even in kernel context (my opinion), 
-but if dynamic management happened, RAII have its own problem. for example 
+C++ RAII idom using constructor/destructor to acquire/release resource, acquired resource
+kept as member, so it has no confusion during cleanup, and more important, resource management
+auto keep sync as RAII object lifetime, makes the resource abstraction straightforward. 
+this can implements simple "cleanup at scope exit" behaivor,
+also can implement more flexiable resource management by passing RAII object around.
+for example
 
 ```
-unique_ptr<Resource> resource;
+struct ComplexResource{
+   .....
+};
 
-transfer_and_reset_resource(resource);
+std::unique_ptr<ComplexResource> return_resource(){
+   unique_ptr<ComplexResource> ret(new ComplexResource());
+   .....
+   return ret;
+}
+
+void use_resource(){
+   unique_ptr<ComplexResource> resouce = return_resource();
+   ...//use resource
+   ...//at scope end,resource auto cleanup itself because unique_ptr cleanup its holding ComplexResource pointer
+   ...//and ComplexResource auto cleanup its holding resource by ComplexResource destructor
+}
 
 ```
-since resource need to be transfered and cleanup inside transfer_and_reset_resource function,
-we cannot use RAII type (Resource type here) as stack value variable, must wrap
-it as smart pointer (unique_ptr here), but problem is that after transfer_and_reset is called,
-resource already became invalid, 
+use unique_ptr to extend ComplexResource lifetime, so resource can outlive scope it constructed, 
+while still hold auto cleanup property (unique_ptr is also a RAII object which manage its holding pointer)
+
+C++ RAII also have unique weakness, let's also talk about them. first is the C++ copy semantic,
+
+if your ComplexResource is written as 
+```
+struct ComplexResource{
+   void *resource;
+};
+```
+then
+```
+unique_ptr<ComplexResource> resouce = return_resource();
+ComplexResource temp = *source
+```
+lead a double free (or double deallocate) problem, because C++ use copy semantic,
+temp var also holding resouce ,and they both try to cleanup same thing, twice.
+actually copy semantic bring another confusing point: unique_ptr holding 
+its internal pointer, why return_resource function can return unique_ptr?
+doesn't this trigger double free bug too ? the answser is no,  unique_ptr
+forbid copy contructor so you can not copy unique_ptr to another variable
+(thus it prevent unexpected copy to lead double free bug)
+```
+unique_ptr<ComplexResource> p1;
+unique_ptr<ComplexResource> p2 = p1; //won't compile, error
+```
+
+but this raises other questions, if it can't be copied,
+how can return_resource return it and why use_resource can assign returned value
+from return_resource to variable ? the answser is C++ have many 'tricky' rules,
+makes these code valid (although such rules doesn't match programmers straightforward 
+view of code very much, see RVO/move constructor/rvalue)
+
 

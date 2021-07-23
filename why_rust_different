@@ -8,7 +8,7 @@ seen as C superset (from some ones' perspective), Linus personally hate it, he e
 the long mail list (https://lore.kernel.org/ksummit/CANiq72kF7AbiJCTHca4A0CxDDJU90j89uh80S3pDqDt7-jthOg@mail.gmail.com/) 
 which to bring rust to kernel, we can find there is no exception this time.
 
-This mail list starts at 2021-06-25, Linus (please note it is Linus Torlards, not Linus Walleij) keeps silent until 2021-07-07 , after
+This mail list starts at 2021-06-25 , Linus (please note it is Linus Torlards, not Linus Walleij) keeps silent until 2021-07-07 , after
  Bart Van Assche brings up topic 'why C++ not in kernel'
  
  ```
@@ -70,7 +70,7 @@ issues. C++ would not.
 
 Let's take Linus first argument about 'new operator'
 
-userspace(none-kernel) programmer may be supprised by Linus POV, most language
+userspace(none-kernel) programmer may be supprised by Linus' point, most language
 (such as gc based java/c# or C++) design the library/runtime to work "magically"
 when dealing with memory allocation(from kernel developer's POV) . for example in C++
 
@@ -79,23 +79,24 @@ std::string temp;
 temp.push_back("I_am_very_long_string");
 ```
 there is no explicit allocating call , but under the hood such code must allocate 
-dynamic heap memory.  such code running in userspace is no big deal, it just said 
+dynamic heap memory. Running this code in userspace is no big deal, it just said 
 "I don't care about how memory come from,
-just give me 1MB memory, or I will throw a OOM exception", and most
+just give me 1MB memory, or I will throw a Out-Of-Memory exception or just terminated", and most
 userspace program don't care about OOM exception, they just let it crash whole program. 
- this makes sense for most scenario, since most program is designed to work under
+ this makes sense for most scenario, since most program is designed to only work under
 "normal" environment(say, with enough memory to finish the work), if such condition not 
-satisified anymore, there's very little program can do to recover (suppose another leaking
-program consumed all the memory, leads your program memory allocation failed, only way to
-recover functional is to kill the leaking program. but to do this, you still need memory 
-allocation to list and find leaking one, thus OOM again and can't complete)
+satisified anymore, there's very little it can do to recover. suppose another leaking
+program consumed all the memory, leads your program memory allocation failed,kill the leaking program
+is the only way to recover. but to do this, you still need memory 
+allocation (to list and find leaking one_, thus OOM again and can't complete.
 
 
 but this is not the case for Kernel.firstly there's no simple 'just gives me 1MB  memory' like malloc/new, 
 kernel need to allocate memory with many flags depends on current running context, and secondly if such allocation 
 failed, you can not simply throw OOM exception and crash, not only because exception is
 too heavyweighted to be included in kernel, but also because a sensible kernel should never crash,
-even under extream OOM case. there're some workaround (for example allocate memory 
+even under extream OOM case. As Bart Van Assche suggested, there're some workaround 
+to make C++ new work in kernel (for example allocate memory 
 manually first, and then using placement new, or using nothrow new), but the second argument
 is the real reason why Linus not accept C++ as kernel development language:
 
@@ -192,27 +193,31 @@ free_queue_mem:
 
 seems easy to fix, right ? code have two allocations, but forget to deallocate first one if the 
 second allocation failed. but the question is such leak is also easy to introduce, suppose similar
-function need to allocate many times, such problem became harder. what makes it worse is maintainable,
+function need to allocate many times, this problem became harder. what makes it worse is maintainable,
 since the cleanup function should be exactly same order as allocation (otherwise such cleanup table can't
 be shared from different failure point), developer needs to be very careful to keep them
 in sync when adjust order of allocation. break this rule may lead to leak/corruption/double free bugs.
-RAII (as mentioned by Bart Van Assche), is C++ idom to address such problem, the trick is that destructor
-will be run exactly when object exit scope, no matter if the scope is exited by normal control flow
-or early error return. similar mechanisum (run function at scope exit) is borrowed by many other languages
-for example java 1.7 try-with-resource, C# 8 using, go defer function, and also rust drop (some sort of),
+
+So does C++ have improvement in this area (leak) ?  I think the answser is yes (Linus maybe not agree with it :)
+RAII (as mentioned by Bart Van Assche), is C++ idom to address such problem, the trick is that constructor/destructor
+will be run exactly only once during object lifetime, so put resource acquire/release in constructor/destructor
+makes such object auto manage the resource (usually as a stack variable which lifetime binded to syntax scope).
+similar mechanisum is also borrowed by many other languages
+for example java 1.7 try-with-resource, C# 8 using, go defer function, and also rust drop,
 even C commitee is looking into adding defer function to implement RAII like idom.
 (http://www.open-std.org/jtc1/sc22/wg14/www/docs/n2542.pdf)
-From my personal view, before rust lang, I would say C++ destructor approach is the best to do automatic
-resource management, better than Java/C# or go defer, I list my reasons here:
+From my personal view, before rust , C++ approach is better than Java/C# or go defer(also including proposed C defer),
+I list my reasons here:
 
-Java/C# early versions don't have such semantic, source management is done by try/catch/finally, 
-new mechanism needs code migration, and force developer to make resource type inherit particular interface,
-and again, developers can forget them, especially Java/C# being GC language. 
+Java/C# forces developer to make resource type inherit particular interface to corperate
+with resource manage syntax, but since cleanup function are just public method exposed by type,
+developer are free to call these cleanup function at their will, that force cleanup function to 
+always bookmark "resource already cleanup flag" in logic to avoid double-free alike bugs.
 
 
 defer function have semantic confusions : 
 the defer function defined point(in-between code) must be different to 
-execute point (function end, or scope end), but what values do the argument used by defer function hold? 
+execute point (function end, or scope end), but what values do the argument (used by defer function) hold? 
 do they 'capture' values at define point , or do they use most-written new value ? 
 go prefer previous (https://tour.golang.org/flowcontrol/12)
 ```
@@ -236,11 +241,10 @@ will print
 resource is xyz
 clean resource abc while running defer
 ```
- this policy implicits that
-the variable which hold resource can't changed to point to new resource after
+lead a mismatch cleanup. this policy implicits that
+the variable which hold resource can't be changed to point to new resource after
 defer function defined(otherwise you're cleaning incorrect resource),
-or you have to define new defer function everytime 
-new resource is assigned.
+or you have to define new defer function everytime when new resource is assigned.
 
 
 C porposed defer function also have such confusions:
@@ -256,12 +260,13 @@ copy and reference semantics. A more specific solution is to use a second defer 
 syntax which supplies an identifier list of variables to capture by value.
 
 ```
+(I'm strongly opposed to the idea of bring 'reference capture in lambda' to C, in later part
+we'll see why it will introduce more problems)
 
-C++ RAII idom using constructor/destructor to acquire/release resource, acquired resource
-kept as member, so it has no confusion during cleanup, and more important, resource management
-auto keep sync as RAII object lifetime, makes the resource abstraction straightforward. 
-this can implements simple "cleanup at scope exit" behaivor,
-also can implement more flexiable resource management by manage RAII object lifetime .
+C++ RAII idom makes acquired resource
+kept as member, so it has no confusion during cleanup, and more important, such idom makes
+resource avaialbility exactly same as wrapper type lifetime, makes abstraction straightforward. 
+and this makes auto resource management decoupled from fixed syntax scope. 
 for example
 
 ```
@@ -283,10 +288,10 @@ void use_resource(){
 }
 
 ```
-use unique_ptr to extend ComplexResource lifetime, so resource can outlive scope it constructed, 
-while still hold auto cleanup property (unique_ptr is also a RAII object which manage its holding pointer)
+use unique_ptr to make ComplexResource lifetime outlive scope where it constructed, 
+and it still hold auto management property (unique_ptr is also a RAII object which manage its holding pointer)
 
-C++ RAII also have unique weakness, let's also talk about them. first is the C++ copy semantic,
+but C++ RAII also have weakness, let's also talk about them. first is the C++ copy semantic,
 
 if your ComplexResource is written as 
 ```
@@ -299,29 +304,39 @@ then
 unique_ptr<ComplexResource> resouce = return_resource();
 ComplexResource temp = *source
 ```
-lead a double free problem, because C++ use copy semantic,
-temp var also holding resouce ,and they both try to cleanup same thing, twice.
-this brings another confusing point: unique_ptr seems being copied multi times,
-doesn't this also trigger double free bug  ? the answser is no,  unique_ptr
-forbid copy so you won't copy unique_ptr even by accident
-(thus it prevent unexpected copy to lead double free bug)
+lead a double free problem, because C++ copy semantic makes
+temp var also holding resouce ,two copies will both run cleanup function, which leads a double free alike bug.
+and this also brings another C++ confusing question: unique_ptr seems being copied multi times,
+doesn't this also trigger double-free alike bug  ? the answser is no,  
+unique_ptr implementation forbid copy (at compile time) so you can't copy unique_ptr 
+(even by accident because that leads compile error) thus it prevent unexpected copy lead double free bug,
+for example
 ```
 unique_ptr<ComplexResource> p1(new ComplexResource());
 unique_ptr<ComplexResource> p2 = p1; //won't compile, error
 ```
 
-but this raises other questions, if it can't be copied,
-how can return_resource return it and why use_resource can assign returned value
+but this raises more confusing questions, if it can't be copied,
+how can return_resource return it and how can use_resource can returned value
 from return_resource to variable ? the answser is C++ have many other 'tricky' rules,
 these assignments is not 'copy', they're 'elision-copy' and 'move assignment',
 which makes these code correct (although such rules doesn't match programmers 
 straightforward view of code very much)
 
-unique_ptr also have problems, C++ happily accept code like 
+Even experienced C++ developer may have to read the hundreds pages of C++ spec
+to understand what rules is used in which condition, understand these tricky rules
+may be harder than resolve bugs in simple way,  I think it must be one important reason
+kernel developers dislike C++ , since they used to program in C, which has much straightforward
+semantic.
+
+
+even that we already understand these tricky rules, C++ still have other problems,
+for example it happily accept code like 
 ```
 unique_ptr<ComplexResource> p1(new ComplexResource());
 delete p1.get();
 ```
+which leads a double-free alike bug.
 some C++ developer may argue that I shouldn't use manual delete on pointer
 which managed by smart pointer, but unforunitely, such rule is not enforced by compiler
 and real world codebase are much more complex, such error pair may be in completely
@@ -346,9 +361,9 @@ firstly its alike calling destructor manullay or unique_ptr.reset,
 but they're different, calling destructor manully on stack variable in C++
 leads double free (alike) bugs, but rust
 knows you don't need to run destructor again because you already drop it.
-and this is also different to C++ unique_ptr.reset, since unique_ptr only
-knows not to call destructor again because its internal pointer is null
-at runtime, but rust knows such behaivor at compile time, without any runtime
+and this is also different to unique_ptr.reset, since unique_ptr only
+knows whether to call destructor at runtime (depends on if internal pointer null),
+but rust knows such behaivor at compile time, without any runtime
 bookmark ! and future more, in C++, you may access nullptr after reset unique_ptr
 by acceident 
 ```
@@ -361,9 +376,26 @@ but rust compiler find your mistake at compile time!
 ```
 ComplexResource res = return_resource();
 drop(res);
-use_res_again(res); ------------> rust won't compile, it tells you res already moved in drop call so you can't use it anymore
+use_res_again(res); ------------> rust won't compile, it tells you res already moved in drop call so you can't use it anymore! 
 ```
-That 
+
+How can this be done? because rust drop function argument declared as 'takes ownership',
+since any code after drop don't have res ownership anymore (already taken by drop), 
+any usage on res is error.
+This feather really makes rust shine and unique, it prevent whole bunch of use-after-free
+alike bugs at compile time. Let's consider C/C++/Java/C#/Go codes, 
+variable accessiblility is binded to syntax scope ( innermost { } which beyond variable),
+but the lifetime of resource which variable hold may be different, use-after-free alike 
+bugs happend when resource is cleaned up but variable being accessed (because it still accessiable in scope) later,
+and human quickly failed to track these explored states as long as control flow grown complex.
+but rust compiler can track these states for you, elimit such invalid state access.
+
+as a comparison, although C++ move constructor can implement some sort of similar 'ownership transfer' behaivor,
+but still allow access to 'already moved out' variable, thus such bugs can still happen.
+
+C++ developers may also try to find other ways to break rust memory safety
+
+
 
 
 

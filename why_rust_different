@@ -116,10 +116,17 @@ clear (in a thread about Rust support) that it is a strict improvement
 over C++, and not a small one at that.
 ```
 
+Argues over different language are almost FUD topic, consider that C++ already 
+being larged used by industry. but I suggest readers (escpecially C++ developers)to keep peace,
+since rust grown popular largly because of firefox mirgration, which its codebase
+originally developed in C++ for many years, developers behind firefox are
+definitely knows C++ well, and kernel developers are deinitely knows C well,
+maybe we can learn something from their argues.
+
 so what's the issue that makes C problematic ?
 short answser is memory safety, C is so bare-metal that it almost didn't forbit any incorrect semantic
 code, for kernel development, it brings easily low-level access, but also too easy to code correctly,
- even for the most intellegent people who use it to do years kernel developing. 
+ even for the most intellegent people who use it for years kernel developing.  
  
  I grep the kernel git log from 2.6.12-rc2(2005-Apr 1da177e4c3f) to about 5.13-rc6 (2021-Jun 6b00bc639) by
 ```
@@ -316,26 +323,45 @@ unique_ptr<ComplexResource> p1(new ComplexResource());
 unique_ptr<ComplexResource> p2 = p1; //won't compile, error
 ```
 
-but this raises more confusing questions, if it can't be copied,
-how can return_resource return it and how can use_resource can returned value
-from return_resource to variable ? the answser is C++ have many other 'tricky' rules,
-these assignments is not 'copy', they're 'elision-copy' and 'move assignment',
-which makes these code correct (although such rules doesn't match programmers 
+but this raises more confusing questions, if can't be copied,
+how can function return it and how can returned value being
+assigned to variable ? the answser is C++ have many other 'tricky' rules,
+which makes these 'elision-copy' and 'move assignment'  instead of copy 
+(although such rules doesn't match programmers 
 straightforward view of code very much)
 
-Even experienced C++ developer may have to read the hundreds pages of C++ spec
-to understand what rules is used in which condition, understand these tricky rules
-may be harder than resolve bugs in simple way,  I think it must be one important reason
-kernel developers dislike C++ , since they used to program in C, which has much straightforward
-semantic.
+Even experienced C++ developer have to read the hundreds pages of C++ spec
+to understand what rules is used in which condition, it's even harder to
+understand these rules than resolving bugs in simpler way,  I think it must be one important reason
+that kernel developers dislike C++ , since kenerl development is low-leveled,
+developers want to control every detail straightforward as simple as C semantic.
 
 
-even that we already understand these tricky rules, C++ still have other problems,
-for example it happily accept code like 
+even understood these tricky rules, C++ still have other problems, RAII only
+works if we strictly follow some concepts, otherwise failed.
+for example we expect destructor to run only once, but we can call it
+just like normal function calls, as many times as we want, for example
+
+```
+{
+ComplexResource resource; // resource init
+resource::~ComplexResource(); // calling destructor already cleanup resource
+} // scope exit, destructor runs again lead a double-free like bug
+```
+Developers may be suprsied by such behavior, why allow it ? since C++ have 'placement new'
+which construct object over manually allocated memory (instead of built-in auto allocate mechanisum),
+such created object won't be managed by C++ 'auto destrory at scope exit' rule,
+(because compiler don't know how to deallocate your manually allocated memory at compile time)
+thus manually calling destructor worked in this scenario, but it leaves a bad hole,
+if you failed to track object construct method (normal constructed or placement new constructed),
+you may experience double-free alike bugs, or leak alike bugs.
+
+similar problem happened on smart_pointer
 ```
 unique_ptr<ComplexResource> p1(new ComplexResource());
 delete p1.get();
 ```
+
 which leads a double-free alike bug.
 some C++ developer may argue that I shouldn't use manual delete on pointer
 which managed by smart pointer, but unforunitely, such rule is not enforced by compiler
@@ -343,14 +369,13 @@ and real world codebase are much more complex, such error pair may be in complet
 different files, not so easy to spot. especially when you have many legcy code which
 only accept raw pointer.
 
-now let's see why rust is different for auto resource management. at first,
-its alike C++ RAII, constructor acquire resource, destructor (drop) cleanup it,
+now let's see how rust improve this. at first, rust approach borrowed from C++ ,
+constructor acquire resource, destructor (drop) cleanup it,
 but rust non-POD (in C++ term) types use 'move semantic', which means
-if assignment of RAII type in rust are always transfer (without C++ whole bunch
-of dark rules), so another wrapper (unique_ptr in C++ example) to 
-control RAII object lifetime is needless.and interesting part came for
-manually object destroy, rust default destruct object at scope end, but if
-you want to destroy object early, you call
+assignment of RAII type in rust are always transfered (without C++ whole bunch
+of dark rules), so no wrapper (unique_ptr in C++ example, or you have to implement move constructor yourself) 
+is needless. Interesting part came for
+manually object destroy, rust default destruct object at scope end, but you can make it earlier by
 
 ```
 ComplexResource resource = return_resource();
@@ -380,18 +405,17 @@ use_res_again(res); ------------> rust won't compile, it tells you res already m
 ```
 
 How can this be done? because rust drop function argument declared as 'takes ownership',
-since any code after drop don't have res ownership anymore (already taken by drop), 
-any usage on res is error.
-This feather really makes rust shine and unique, it prevent whole bunch of use-after-free
+since drop already taken its ownership, any later code won't be able to access it.
+This feather really makes rust shine and unique, it prevent whole bunch of leak/use-after-free
 alike bugs at compile time. Let's consider C/C++/Java/C#/Go codes, 
 variable accessiblility is binded to syntax scope ( innermost { } which beyond variable),
-but the lifetime of resource which variable hold may be different, use-after-free alike 
-bugs happend when resource is cleaned up but variable being accessed (because it still accessiable in scope) later,
-and human quickly failed to track these explored states as long as control flow grown complex.
-but rust compiler can track these states for you, elimit such invalid state access.
+but the lifetime of resource it holds may be different, use-after-free alike 
+bugs happend when resource is cleaned up but variable being accessed later(because it still accessiable in scope) ,
+as long as program grow complex, human quickly failed to track these explored states combination,
+but rust compiler track these invalid states for you, once again, at compile time.
 
 as a comparison, although C++ move constructor can implement some sort of similar 'ownership transfer' behaivor,
-but still allow access to 'already moved out' variable, thus such bugs can still happen.
+but still allow access to 'already moved out' variable, thus use-after-free alike bugs can still happen. 
 
 C++ developers may also try to find other ways to break rust memory safety
 

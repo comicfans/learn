@@ -407,7 +407,7 @@ use_res_again(res); ------------> rust won't compile, it tells you res already m
 How can this be done? because rust drop function argument declared as 'takes ownership',
 since drop already taken its ownership, any later code won't be able to access it.
 This feather really makes rust shine and unique, it prevent whole bunch of leak/use-after-free
-alike bugs at compile time. Let's consider C/C++/Java/C#/Go codes, 
+alike bugs at compile time. Let's consider C(and many other languages) codes, 
 variable accessiblility is binded to syntax scope ( innermost { } which beyond variable),
 but the lifetime of resource it holds may be different, use-after-free alike 
 bugs happend when resource is cleaned up but variable being accessed later(because it still accessiable in scope) ,
@@ -417,9 +417,96 @@ but rust compiler track these invalid states for you, once again, at compile tim
 as a comparison, although C++ move constructor can implement some sort of similar 'ownership transfer' behaivor,
 but still allow access to 'already moved out' variable, thus use-after-free alike bugs can still happen. 
 
-C++ developers may also try to find other ways to break rust memory safety
+another important feather of rust is 'reference', it sounds like C++ reference, 
+but we'll see how rust improve this feathuer by closing bad hole.
+
+C++ reference can be viewed as a syntax sugar of pointer, but appears like a 'value'.
+to makes it behaivor more alike a value, C++ requires reference must be initialized to point to some value,
+but due to its pointer nature, compiler can not verify if it point to valid value,
+nor can it assume such refernce always valid (just like raw pointer), for example
+```
+int *p = nullptr;
+int &r = *p;  
+```
+compiles, and suprised to some readers, it's also correct (even at runtime) , because
+reference variable are just pointer, initialize reference won't deference the pointee, thus no problem.
+but read/write this reference later is same error as deference null pointer.
+valid reference can also be 'invalidated' by pointee earlier destroy , for example
+
+```
+std::string init;
+std::string &ref = init;
+{
+   std::string scoped;
+   ref = scoped;
+}
+ref = "abc" // boom
+```
 
 
+how rust improve this ? it forbids reference variable to have longer lifetime than pointee variable
+```
+let a: &i32;
+{
+ let b:i32 = 0;
+ a=&b;  <--------- rust tells you b live too short, already destroy at scope end
+}
+let c = a+1;   <------but a referenced b and used here so it's an error
+```
+
+another importand rule of rust reference is 'mutability',one variable can not have two mutable reference
+, nor can have mutable and immuable reference at same time , it sounds like a read/write lock, 
+but actually is a compile time rule (without runtime overhead). Let's take another C++ example to show 
+why such rule is important 
+```
+std::vector<int> vec = {1,2,3};
+auto it = vec.begin();
+vec.push_back(4);
+*it // ---> boom
+```
+but similar logic won't compile in rust:
+```
+let mut vec = vec![1,2,3];
+let it = vec.iter();  ----> iter has immutable referenced to vec
+vec.push(4);          ----> push do a mutable referenced to vec
+let last = it.last(); ----> used immutable referenced again, build error
+```
+
+rust member function is alike C++ one's ,which can be marked as const
+thus makes this pointer const or not, but different to C++, such 'mutable'
+also prograte effects if returned type have reference to 'this' state,
+since iter reference vec state, when such variable exist, rust keep the 
+vec immutable, thus out-of-date reference bug won't happen.
+
+such restriction does not only apply to simple scenairo, it provides such protection
+even in nested logic, for example
+```
+let a: &i32;       
+
+let vec = vec![1,2,3];
+let it = vec.iter();
+let a = it.last().unwrap();   // a is immutable reference to vec last element
+vec.push_back(4);             // but vec want to do mutable change
+let b = a;                    // a immutable reference to vec (through iter), again build error
+```
+
+so using reference in rust is more straightfowrad, when your code compiles, 
+no need to worry about invalid reference , out-of-date reference bugs.
+
+developers may ask how to express simutenious read/write reference pattern in rust ?
+actually rust is smart, it can infer code to tell if such pattern is safe or not, 
+if reorder last line read access before vec.push_back,  rust accepts it.
+
+rust also makes big improvement to multi-thread programming. it model two important
+thread concepts into language rules, Send and Sync, which makes thread programming much easier , 
+or at least, makes bugs more easier to spot. 
+
+Send means such type is safe to be moved to another thread, remeber rust using move
+semantic for non-POD type ? when programming multi-thread, you must start a thread
+and passing in working data set (from parent thread), but if type can't be moved
+between thread (for example using TLS), such code won't be compiled. 
+
+Sync means such type 
 
 
 

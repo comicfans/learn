@@ -495,19 +495,10 @@ no need to worry about invalid reference , out-of-date reference bugs.
 
 developers may ask how to express simutenious read/write reference pattern in rust ?
 actually rust is smart, it can infer code to tell if such pattern is safe or not, 
-if reorder last line read access before vec.push_back,  rust accepts it.
-
-rust also makes big improvement to multi-thread programming. it model two important
-thread concepts into language rules, Send and Sync, which makes thread programming much easier , 
-or at least, makes bugs more easier to spot. 
-
-Send means such type is safe to be moved to another thread, remeber rust using move
-semantic for non-POD type ? when programming multi-thread, you must start a thread
-and passing in working data set (from parent thread), but if type can't be moved
-between thread (for example using TLS), such code won't be compiled. 
-
-Sync means such type 
-
+if reorder last line read access before vec.push_back.  If more dynamic logic needed, 
+say, read/write based on control flow, rust provides helper library (Cell/RefCell) to implement
+such logic at runtime while still enforce same rules of compile time,
+but raise a runtime crash if such rule breaked.
 
 
 

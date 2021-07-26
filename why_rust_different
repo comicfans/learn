@@ -1,15 +1,18 @@
-as a new language , rust gains lots of attaction, there're also many projects, which historic using C as primary language ,
-begin to migrate to rust (librsvg/curl/tor). The most interesting project is definitely "bring rust to linux kernel development". 
-what makes it interesting does not only because it's driven by google (Google found support developers who're developing such project), 
-but also rust may become first alternative programming language in kernel development, other than C.
+as a new language , rust gains lots of attaction, there're also sime C projects begin to migrate to rust (librsvg/curl/tor). 
+The most interesting project is definitely try to bring rust to linux kernel development,
+what makes it interesting does not only because it's driven by google 
+(It fond support developers who're developing this project ,also using rust in their home developed fusicha OS), 
+but also that rust may become first alternative programming language in kernel development, other than C.
 
-Previously kernel development always written in C, there're some attempts to bring C++ in, but never success. although C++ can be
-seen as C superset (from some ones' perspective), Linus personally hate it, he expressed many times "C++ is horrible language". Follows
-the long mail list (https://lore.kernel.org/ksummit/CANiq72kF7AbiJCTHca4A0CxDDJU90j89uh80S3pDqDt7-jthOg@mail.gmail.com/) 
-which to bring rust to kernel, we can find there is no exception this time.
+Previously kernel development always written in C, there're some attempts to bring C++ in, but never success.
+although C++ can be seen as C superset (from some ones' perspective), 
+Linus personally hate it, he expressed many times "C++ is horrible language". If followed
+the long 'bring rust to kernel' mail list 
+(https://lore.kernel.org/ksummit/CANiq72kF7AbiJCTHca4A0CxDDJU90j89uh80S3pDqDt7-jthOg@mail.gmail.com/) 
+, we can find Linus still holds his opinion.
 
-This mail list starts at 2021-06-25 , Linus (please note it is Linus Torlards, not Linus Walleij) keeps silent until 2021-07-07 , after
- Bart Van Assche brings up topic 'why C++ not in kernel'
+This mail list starts at 2021-06-25 , Linus (please note it is Linus Torlards, not Linus Walleij) 
+keeps silent until 2021-07-07 , after Bart Van Assche brings up topic 'why C++ not in kernel'
  
  ```
  ...
@@ -88,7 +91,7 @@ userspace program don't care about OOM exception, they just let it crash whole p
 satisified anymore, there's very little it can do to recover. suppose another leaking
 program consumed all the memory, leads your program memory allocation failed,kill the leaking program
 is the only way to recover. but to do this, you still need memory 
-allocation (to list and find leaking one_, thus OOM again and can't complete.
+allocation (to list and find leaking one, thus OOM again and can't complete)
 
 
 but this is not the case for Kernel.firstly there's no simple 'just gives me 1MB  memory' like malloc/new, 
@@ -118,14 +121,14 @@ over C++, and not a small one at that.
 
 Argues over different language are almost FUD topic, consider that C++ already 
 being larged used by industry. but I suggest readers (escpecially C++ developers)to keep peace,
-since rust grown popular largly because of firefox mirgration, which its codebase
+since rust grown popular largly because of firefox migration, which its codebase
 originally developed in C++ for many years, developers behind firefox are
 definitely knows C++ well, and kernel developers are deinitely knows C well,
 maybe we can learn something from their argues.
 
 so what's the issue that makes C problematic ?
 short answser is memory safety, C is so bare-metal that it almost didn't forbit any incorrect semantic
-code, for kernel development, it brings easily low-level access, but also too easy to code correctly,
+code, for kernel development, it makes low-level access easier, but also too relaxed to code correctly,
  even for the most intellegent people who use it for years kernel developing.  
  
  I grep the kernel git log from 2.6.12-rc2(2005-Apr 1da177e4c3f) to about 5.13-rc6 (2021-Jun 6b00bc639) by
@@ -135,15 +138,21 @@ git log --grep=leak --grep=error --all-match --oneline | wc -l
 got 4626 result, you may also grep for "double free" (2234) or "use after free" (9987) to know how many memory 
 safely bugs introduced and fixed in linux kernel. please note, some of these bugs are logic related ( 
 even written in other languages it can still happen), but lack of memmory safety in C definitly be the cause
-of most memory errors. as a side note, tor(which originally written in C) developers share their view 
+of most memory errors.
+
+(side notes from tor 
 in https://blog.torproject.org/announcing-arti
 ```
 Since 2016, we've been tracking all the security bugs that we've found in Tor, and it turns out that 
 at least half of them were specifically due to mistakes that should be impossible in safe Rust code
 ```
+and libcurl
+```
+19 of the last 22 vulnerabilities (since 2018) have C-induced memory unsafety as a cause.
+```
+)
 
-
-These catalog of bugs share a common property: they're so "trivial", even not being
+These catalog of bugs share some common property: they're so "trivial", even not being
 kernel developer, we can easily understand why these piece of code is incorrect (with help of commit), 
 and they're also so error-prone,even experience kernel developers continuous introduce such bugs. 
 here I pick a leak fix as example
@@ -199,11 +208,11 @@ free_queue_mem:
 ```
 
 seems easy to fix, right ? code have two allocations, but forget to deallocate first one if the 
-second allocation failed. but the question is such leak is also easy to introduce, suppose similar
+second allocation failed. but the question is such leak bug is also easy to introduce, suppose similar
 function need to allocate many times, this problem became harder. what makes it worse is maintainable,
 since the cleanup function should be exactly same order as allocation (otherwise such cleanup table can't
 be shared from different failure point), developer needs to be very careful to keep them
-in sync when adjust order of allocation. break this rule may lead to leak/corruption/double free bugs.
+in sync when adjust order of allocation. break this rule may lead to leak/double free bugs.
 
 So does C++ have improvement in this area (leak) ?  I think the answser is yes (Linus maybe not agree with it :)
 RAII (as mentioned by Bart Van Assche), is C++ idom to address such problem, the trick is that constructor/destructor
@@ -251,7 +260,7 @@ clean resource abc while running defer
 lead a mismatch cleanup. this policy implicits that
 the variable which hold resource can't be changed to point to new resource after
 defer function defined(otherwise you're cleaning incorrect resource),
-or you have to define new defer function everytime when new resource is assigned.
+or you have to define new defer function everytime when new resource is created and assigned.
 
 
 C porposed defer function also have such confusions:
@@ -272,8 +281,8 @@ we'll see why it will introduce more problems)
 
 C++ RAII idom makes acquired resource
 kept as member, so it has no confusion during cleanup, and more important, such idom makes
-resource avaialbility exactly same as wrapper type lifetime, makes abstraction straightforward. 
-and this makes auto resource management decoupled from fixed syntax scope. 
+resource avaialbility exactly same as wrapper type lifetime,usch abstraction is straightforward. 
+and this makes cleanup timepoint decoupled from fixed syntax scope. 
 for example
 
 ```
@@ -311,10 +320,10 @@ then
 unique_ptr<ComplexResource> resouce = return_resource();
 ComplexResource temp = *source
 ```
-lead a double free problem, because C++ copy semantic makes
-temp var also holding resouce ,two copies will both run cleanup function, which leads a double free alike bug.
-and this also brings another C++ confusing question: unique_ptr seems being copied multi times,
-doesn't this also trigger double-free alike bug  ? the answser is no,  
+lead a double free problem, because copy semantic makes
+temp var also holding resouce and it will also try to cleanup at scope end.
+This also brings another C++ confusing question: unique_ptr seems being copied multi times,
+doesn't this also trigger similar problem  ? the answser is no,  
 unique_ptr implementation forbid copy (at compile time) so you can't copy unique_ptr 
 (even by accident because that leads compile error) thus it prevent unexpected copy lead double free bug,
 for example

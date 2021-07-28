@@ -495,19 +495,29 @@ let a: &i32;
 let vec = vec![1,2,3];
 let it = vec.iter();
 let a = it.last().unwrap();   // a is immutable reference to vec last element
-vec.push_back(4);             // but vec want to do mutable change
+vec.push(4);             // but vec want to do mutable change
 let b = a;                    // a immutable reference to vec (through iter), again build error
 ```
 
-so using reference in rust is more straightfowrad, when your code compiles, 
-no need to worry about invalid reference , out-of-date reference bugs.
+rust also do some context anlysis than simply look for variable scope, if reorder last line assigment
+before vec.push, thus mutable usage won't invalid the immutable reference, rust accepts it.
 
-developers may ask how to express simutenious read/write reference pattern in rust ?
-actually rust is smart, it can infer code to tell if such pattern is safe or not, 
-if reorder last line read access before vec.push_back.  If more dynamic logic needed, 
-say, read/write based on control flow, rust provides helper library (Cell/RefCell) to implement
-such logic at runtime while still enforce same rules of compile time,
+If such reference behaivor is based on dynamic control flow,
+rust also provides helper library (Cell/RefCell) to implement it at runtime while still enforce same rules as compile time,
 but raise a runtime crash if such rule breaked.
+
+As a C++ developer , ownership and reference mutable concepts attacts me most, 
+for years C++ development, you must heared some 'best practice' such as
+'who allocate, who deallocate' to keeps object lifetime clearly binded to
+some object/scope, or makes program structure tree liked, thus child object/scope
+can safely reference parent node's, but in practices, code refactor happened
+while program function grew, it's easy to break these rules, and leads nasty memory bugs.
+one such 
+
+
+(I didn't list Send/Sync
+since its implementation depends on unsafe, type safe enum)
+
 
 
 

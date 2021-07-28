@@ -510,15 +510,65 @@ As a C++ developer , ownership and reference mutable concepts attacts me most,
 for years C++ development, you must heared some 'best practice' such as
 'who allocate, who deallocate' to keeps object lifetime clearly binded to
 some object/scope, or makes program structure tree liked, thus child object/scope
-can safely reference parent node's, but in practices, code refactor happened
-while program function grew, it's easy to break these rules, and leads nasty memory bugs.
-one such 
+can safely reference parent node's, but in practices,
+break these rules may only lead to nasty memory bugs without notice, 
+when codebase grew, it's almost impossible for human to identify them.
+
+To address this, google developed address sanitizer to catch these bugs by inspect
+all memory read/write action at runtime, combined with fuzzer test,
+lots of memory bugs found in many C/C++ codebase, including linux kernel.
+it does not only greatly improved C/C++ ecosystem, but also shows how easily C/C++
+can introduce memory bugs. Gentoo developers even create 'asantoo' to build whole linux environment
+with ASAN eanbled, I tried to use it in my daily work, and quickly found
+memory bugs happened here and there. and more bugs may (almostly) exist since
+ASAN can only find bugs for actually running control flow.
+That makes me to come to a conclusion: If still using C/C++ as low level
+implementation language, we may, spend most of time to fight with memory bugs,
+thus no time left to build a better ecosystem. so we should consider rust,
+seriously, since as Linus said, `Rust _fixes_ some of the C safety issues`.
+I personally interpret his second half as 'C++ improved ,but still leaves the bad door open'.
+
+I also suggest interested developers to try rust lambda function , rust model
+lambda with ownership/reference mutable in mind, thus you enjoy same protection as variable 
+ownership/reference mutable,  while it builds, you can assume any variable usage or lambda
+moving around won't introduce dangling reference /leak/ use-after-free bugs. and after
+experiencing rust lambda, you may understand why I say its bad idea to bring 'reference capture in lambda' to C,
+without restrict object ownership/lifetime track feather, capture by reference create varialbles
+seems like a (owned) value, with implictly backed by pointer, which makes use-after-free alike bugs easier to introduce.
+consider similar C++ (which already supports capture by reference in lambda)
+```
+{
+   std::function<int()> lambda;
+   {
+      unique_ptr<int> temp(new int(3));
+      lambda = [&](){ return *temp;};
+   }
+   lambda () // boom
+}
+```
+
+but similar bugs can't be built in rust, interested developers can try themselves, 
+to see if you can fool rust to accept your codes which has similar problem.
 
 
-(I didn't list Send/Sync
-since its implementation depends on unsafe, type safe enum)
+Rust also have other great feathers, someone may mention Send/Sync, since they depends on unsafe 
+implementation (unsafe means rust can't verfiy the correctness of some low level operations, 
+developer takes responsbility to implement it correctly. such as raw memory operation, calling into foreign function ), 
+I don't think they're as important as ownership/reference mutable.
+of course rust is not perfect, for example self-referenced structure code will be 
+biolpate (there's another interesting topic which called rust makes bad-structured program bad-smelled).
+async ecosystem still needs improvement, and so on. but for the most basic part,
+rust do provides soild building blocks to construct problem with less bugs. 
+developers may find rust code 'just works if build', and this is a big steps for development.
 
+It's very hard to talk about rust without compared with C/C++, but that shouldn't
+be just a 'language war' topic, programming languages are learning from each other,
+again consider that mozilla developed rust because they're tired to fixing memory bugs of C++.
+C++ still being used in industry, we can also bring back the ideal from rust back, 
+to create better C++ code.  for example rust design its Mutex to embed the data to protect
+as private member, you must own the RAII object of lock method returned to access the data,
+it provides better semantic than using individual mutex and data. makes access-without-mutex
+bugs impossible at build time. and such mutex design can be easily ported to C++.
 
-
-
-
+at the time of writing (2021-07), support rust in kernel still being disuccessed in mailing thread,
+we can see if it can be accepted, and time will tell if rust really improved our development.

@@ -1,14 +1,10 @@
-as a new language , rust gains lots of attaction, there're also sime C projects begin to migrate to rust (librsvg/curl/tor). 
-The most interesting project is definitely try to bring rust to linux kernel development,
-what makes it interesting does not only because it's driven by google 
-(It fond support developers who're developing this project ,also using rust in their home developed fusicha OS), 
-but also that rust may become first alternative programming language in kernel development, other than C.
+as a new language,  rust gains lots of attactions, there're also some C projects begin to migrate to rust (librsvg/curl/tor). The most interesting project is trying to bring rust to Linux kernel development, what makes it interesting does not only because it's driven by Google (It fund development in linux kernel, and using rust in their home-developed fuchsia OS), but also that rust may become first alternative programming language in kernel development, other than C.
 
 Previously kernel development always written in C, there're some attempts to bring C++ in, but never success.
 although C++ can be seen as C superset (from some ones' perspective), 
 Linus personally hate it, he expressed many times "C++ is horrible language". If followed
-the long 'bring rust to kernel' mail list 
-(https://lore.kernel.org/ksummit/CANiq72kF7AbiJCTHca4A0CxDDJU90j89uh80S3pDqDt7-jthOg@mail.gmail.com/) 
+the long [bring rust to kernel] 
+(https://lore.kernel.org/ksummit/CANiq72kF7AbiJCTHca4A0CxDDJU90j89uh80S3pDqDt7-jthOg@mail.gmail.com/)  mail list
 , we can find Linus still holds his opinion.
 
 This mail list starts at 2021-06-25 , Linus (please note it is Linus Torlards, not Linus Walleij) 
@@ -41,7 +37,7 @@ issues in C (ie no actual safety), and instead it introduces a lot of
 new problems due to bad designs.
 ```
 
-then Bart Van Assche shows some C++ code that override new operator globally (I didn't posted them here)
+then Bart Van Assche shows some C++ code that override new operator globally (I didn't post them here)
 to workaround the problem, and Linus replied:
 
 ```
@@ -73,7 +69,7 @@ issues. C++ would not.
 
 Let's take Linus first argument about 'new operator'
 
-userspace(none-kernel) programmer may be supprised by Linus' point, most language
+userspace(none-kernel) developer may be supprised by Linus' point, most language
 (such as gc based java/c# or C++) design the library/runtime to work "magically"
 when dealing with memory allocation(from kernel developer's POV) . for example in C++
 
@@ -81,15 +77,10 @@ when dealing with memory allocation(from kernel developer's POV) . for example i
 std::string temp;
 temp.push_back("I_am_very_long_string");
 ```
-there is no explicit allocating call , but under the hood such code must allocate 
-dynamic heap memory. Running this code in userspace is no big deal, it just said 
-"I don't care about how memory come from,
-just give me 1MB memory, or I will throw a Out-Of-Memory exception or just terminated", and most
-userspace program don't care about OOM exception, they just let it crash whole program. 
- this makes sense for most scenario, since most program is designed to only work under
-"normal" environment(say, with enough memory to finish the work), if such condition not 
-satisified anymore, there's very little it can do to recover. suppose another leaking
-program consumed all the memory, leads your program memory allocation failed,kill the leaking program
+there is no explicit allocation call , but allocate dynamic heap memory under the hood. Writing such code in userspace is no big deal, it just said 
+"I don't care about how memory came from,just give me 1MB memory, or I will throw an Out-Of-Memory exception or just terminated". most
+userspace programs don't care about OOM exception, they just let it crash the whole program.  this makes sense for the most scenario since they're designed to only work under "normal" conditions(say, with enough memory to finish the work), if such condition not satisified anymore, there's very little it can do to recover. suppose another leaking
+program consumed all the memory, leads your program memory allocation failure,kill the leaking program
 is the only way to recover. but to do this, you still need memory 
 allocation (to list and find leaking one, thus OOM again and can't complete)
 

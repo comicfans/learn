@@ -3,8 +3,7 @@ as a new language,  rust gains lots of attactions, there're also some C projects
 Previously kernel development always written in C, there're some attempts to bring C++ in, but never success.
 although C++ can be seen as C superset (from some ones' perspective), 
 Linus personally hate it, he expressed many times "C++ is horrible language". If followed
-the long [bring rust to kernel] 
-(https://lore.kernel.org/ksummit/CANiq72kF7AbiJCTHca4A0CxDDJU90j89uh80S3pDqDt7-jthOg@mail.gmail.com/)  mail list
+the long [bring rust to kernel](https://lore.kernel.org/ksummit/CANiq72kF7AbiJCTHca4A0CxDDJU90j89uh80S3pDqDt7-jthOg@mail.gmail.com/)  mail list
 , we can find Linus still holds his opinion.
 
 This mail list starts at 2021-06-25 , Linus (please note it is Linus Torlards, not Linus Walleij) 

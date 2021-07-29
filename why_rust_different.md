@@ -36,6 +36,35 @@ issues in C (ie no actual safety), and instead it introduces a lot of
 new problems due to bad designs.
 ```
 
+
+
+Let's take Linus first argument about 'new operator'
+
+userspace(none-kernel) developer may be supprised by Linus' point, most language
+(such as gc based java/c# or C++) design the library/runtime to work "magically"
+when dealing with memory allocation(from kernel developer's POV) . for example in C++
+
+```
+std::string temp;
+temp.push_back("I_am_very_long_string");
+```
+there is no explicit allocation call , but allocate dynamic heap memory under the hood. Writing such code in userspace is no big deal, it just said 
+"I don't care about how memory came from,just give me 1MB memory, or I will throw an Out-Of-Memory exception or just terminated". most
+userspace programs don't care about OOM exception, they just let it crash the whole program.  this makes sense for the most scenario since they're designed to only work under "normal" conditions(say, with enough memory to finish the work), if such condition not satisified anymore, there's very little it can do to recover. suppose another leaking
+program consumed all the memory, leads your program memory allocation failure,kill the leaking program
+is the only way to recover. but to do this, you still need memory 
+allocation (to list and find leaking one, thus OOM again and can't complete)
+
+
+but this is not the case for Kernel.firstly there's no simple 'just gives me 1MB  memory' like malloc/new, 
+kernel need to allocate memory with many flags depends on current running context, and secondly if such allocation 
+failed, you can not simply throw OOM exception and crash, not only because exception is
+too heavyweighted to be included in kernel, but also because a sensible kernel should never crash,
+even under extream OOM case. As Bart Van Assche suggested, there're some workaround 
+to make C++ new work in kernel (for example allocate memory 
+manually first, and then using placement new, or using nothrow new), but the second argument
+is the real reason why Linus not accept C++ as kernel development language:
+
 then Bart Van Assche shows some C++ code that override new operator globally (I didn't post them here)
 to workaround the problem, and Linus replied:
 
@@ -66,32 +95,6 @@ At least the argument is that Rust _fixes_ some of the C safety
 issues. C++ would not.
 ```
 
-Let's take Linus first argument about 'new operator'
-
-userspace(none-kernel) developer may be supprised by Linus' point, most language
-(such as gc based java/c# or C++) design the library/runtime to work "magically"
-when dealing with memory allocation(from kernel developer's POV) . for example in C++
-
-```
-std::string temp;
-temp.push_back("I_am_very_long_string");
-```
-there is no explicit allocation call , but allocate dynamic heap memory under the hood. Writing such code in userspace is no big deal, it just said 
-"I don't care about how memory came from,just give me 1MB memory, or I will throw an Out-Of-Memory exception or just terminated". most
-userspace programs don't care about OOM exception, they just let it crash the whole program.  this makes sense for the most scenario since they're designed to only work under "normal" conditions(say, with enough memory to finish the work), if such condition not satisified anymore, there's very little it can do to recover. suppose another leaking
-program consumed all the memory, leads your program memory allocation failure,kill the leaking program
-is the only way to recover. but to do this, you still need memory 
-allocation (to list and find leaking one, thus OOM again and can't complete)
-
-
-but this is not the case for Kernel.firstly there's no simple 'just gives me 1MB  memory' like malloc/new, 
-kernel need to allocate memory with many flags depends on current running context, and secondly if such allocation 
-failed, you can not simply throw OOM exception and crash, not only because exception is
-too heavyweighted to be included in kernel, but also because a sensible kernel should never crash,
-even under extream OOM case. As Bart Van Assche suggested, there're some workaround 
-to make C++ new work in kernel (for example allocate memory 
-manually first, and then using placement new, or using nothrow new), but the second argument
-is the real reason why Linus not accept C++ as kernel development language:
 
 ```
 but it doesn't change the fact that it doesn't actually *fix* any of the issues that make C problematic

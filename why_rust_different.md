@@ -584,48 +584,25 @@ before vec.push, thus mutable usage won't invalid the immutable reference, rust 
 since these reference mutablility tracked through whole control flow,
 you won't got unexpected invalid reference forever , no matter 
 how hard you tried to:). C++ developers will find modify through alias
-to break rust's protection is a no go, because every reference type's usage
+to break rust's protection is also a no go, because every reference type's usage
 scope are also tracked by rust, it will catch all these invalid access.
 
+And with rust ability to track ownership/reference mutability, working with
+third party libraries makes much easier, since every API exposed object
+have well-defined lifetime and mutability, you don't need to care about
+whether forgot to release it,or incorrectly deallocate its internal memory,
+nor passing already invalid reference to API.
 
-As a C++ developer , ownership and reference mutable concepts attacts me most, 
-for years C++ development, you must heard some 'best practice' such as
-'who allocate, who deallocate' to keeps object lifetime clearly bind to
-some object/scope, or makes program structure tree liked, thus child object/scope
-can safely reference parent node's, but in practices,
-break these rules may only lead to nasty memory bugs without notice, 
-But in rust, developers will find break these practise simply makes
-code not build, and if it built, program just get rid of whole bunch of
-low-level bugs! This is a huge improvement for development.
-
-and with rust ability to track ownership/reference mutable, working with
-third party libraries is much easier, any API exposed object lifetime
-///// here
-
-
-To address this, google developed address sanitizer to catch these bugs by inspect
-all memory read/write action at runtime, combined with fuzzer test,
-lots of memory bugs found in many C/C++ codebase, including linux kernel.
-it does not only greatly improved C/C++ ecosystem, but also shows how easily C/C++
-can introduce memory bugs. Gentoo developers even create 'asantoo' to build whole linux environment
-with ASAN eanbled, I tried to use it in my daily work, and quickly found
-memory bugs happened here and there. and more bugs may (almostly) exist since
-ASAN can only find bugs for actually running control flow.
-That makes me to come to a conclusion: If still using C/C++ as low level
-implementation language, we may, spend most of time to fight with memory bugs,
-thus no time left to build a better ecosystem. so we should consider rust,
-seriously, since as Linus said, `Rust _fixes_ some of the C safety issues`.
-I personally interpret his second half as 'C++ improved ,but still leaves the bad door open'.
-
-I also suggest interested developers to try rust lambda function , rust model
-lambda with ownership/reference mutable in mind, thus you enjoy same protection as variable 
-ownership/reference mutable,  while it builds, you can assume any variable usage or lambda
-moving around won't introduce dangling reference /leak/ use-after-free bugs. and after
-experiencing rust lambda, you may understand why I say its bad idea to bring 'reference capture in lambda' to C,
-without restrict object ownership/lifetime track feather, capture by reference create varialbles
-seems like a (owned) value, with implictly backed by pointer, which makes use-after-free alike bugs easier to introduce.
-consider similar C++ (which already supports capture by reference in lambda)
-```
+I also suggest interested developers to try rust lambda function , rust models
+lambda with ownership/mutability concepts in mind, thus you enjoy same level
+of protection as normal variable,  while it builds, you can assume variable 
+reference usage in lambda or lambda itself movement won't introduce any 
+dangling reference /leak/ use-after-free bugs (interested developers can try
+themselves to see if you can fool rust to accept your codes with such bugs),
+such experience makes huge differences to C++ lambda and C callbacks,
+which requires you to analysis carefully about the object availability at 
+lambda construct/callback time, such as
+```C++
 {
    std::function<int()> lambda;
    {
@@ -635,29 +612,84 @@ consider similar C++ (which already supports capture by reference in lambda)
    lambda () // boom
 }
 ```
+That's the reason why I think it's bad idea to bring
+'reference capture in lambda' to C. Without restrict object
+ownership/lifetime track (this rule breaks C compatibility),
+capture by reference create variables seems like a (owned) value,
+with implicitly backed by pointer, will make use-after-free alike
+bugs easier to introduce.
 
-but similar bugs can't be built in rust, interested developers can try themselves, 
-to see if you can fool rust to accept your codes which has similar problem.
 
 
-Rust also have other great feathers, someone may mention Send/Sync, since they depends on unsafe 
-implementation (unsafe means rust can't verfiy the correctness of some low level operations, 
-developer takes responsbility to implement it correctly. such as raw memory operation, calling into foreign function ), 
-I don't think they're as important as ownership/reference mutable.
-of course rust is not perfect, for example self-referenced structure code will be 
-biolpate (there's another interesting topic which called rust makes bad-structured program bad-smelled).
-async ecosystem still needs improvement, and so on. but for the most basic part,
-rust do provides soild building blocks to construct problem with less bugs. 
-developers may find rust code 'just works if build', and this is a big steps for development.
+
+As a C++ developer,I'm impressed by rust ownership and reference mutability
+concepts, for years development, you must have heard some 'best practice' such as
+'who allocate, who deallocate' to keep object lifetime clearly bind to
+object/scope, and makes program structure tree liked, thus child object/scope
+can safely reference parent node ones', but in practice with grown of codebase,
+these rules are easily break without notice, maybe due to code introduced by
+inexperienced developer, or misunderstood of code structure, or just
+by mistake during refactor. That leads nasty bugs silently and seems unavoidable,
+But in rust, break these practice (which almost implicitly leads some sort of
+problematic lifetime/mutability semantic) simply lead a build failure! 
+And if it built successfully, rust proved that you get rid of whole bunch of bugs!
+This is a huge improvement for development. 
+
+
+In recent years, C/C++ tooling are improving, most important tool
+I think is address sanitizer (ASAN) developed by google, it catches memory bugs by
+inspect all read/write ops at runtime, combined with fuzzer test,
+lots of bugs found across many C/C++ codebase, including linux 
+[kernel](https://github.com/google/kasan/blob/master/FOUND_BUGS.md)
+(as ASAN said: Over the years KASAN has found thousands of issues in the Linux kernel
+so maintaining a full list is pointless. This page contains links to some
+old bugs found with KASAN back in the days when it was being developed.
+Just for historical purposes)
+Gentoo developers even create [asantoo](https://wiki.gentoo.org/wiki/AddressSanitizer)
+to build whole user environment with ASAN, thus every C/C++ software used
+in daily work will be checked for memory bugs during usage. I tried it and quickly
+found memory bugs here and there.
+(more bugs definitely exist since ASAN can only find bugs of actually 
+run control flow). It greatly improved C/C++ ecosystem, but also shows
+how easily C/C++ can introduce memory bugs (these bugs may exist for years
+silently). That makes me came to a conclusion: 
+
+Today software industry almost built everything on top of
+C/C++ (as kernel and system base libs), these low-level base
+definitely needs improvement.
+
+Since I don't know rust at that time,
+I think ASAN is the answer(today ARM already supports hardware based ASAN,
+makes ASAN enabled program running in production
+with acceptable performance a reality). Now we have rust and it omits 
+many such bugs at build time instead of runtime, we should consider it
+as new low-level implementation language, seriously. 
+If still using C/C++, fighting with these countless low-level memory bugs
+may consume more time than to implement new features.
 
 It's very hard to talk about rust without compared with C/C++, but that shouldn't
-be just a 'language war' topic, programming languages are learning from each other,
-again consider that mozilla developed rust because they're tired to fixing memory bugs of C++.
-C++ still being used in industry, we can also bring back the ideal from rust back, 
-to create better C++ code.  for example rust design its Mutex to embed the data to protect
-as private member, you must own the RAII object of lock method returned to access the data,
-it provides better semantic than using individual mutex and data. makes access-without-mutex
-bugs impossible at build time. and such mutex design can be easily ported to C++.
+be just a 'language war' topic, although I used C++ as 
+comparison (since I'm C++ developer for years), we should realized that 
+rust can't be loved by so many developers without learning the good and bad
+from C/C++ (and other languages). C/C++ still being used in industry,
+we can also bring the good ideal from rust back, to create better C/C++ code. 
+For example C++ mutex has nothing to do with the data it protect,
+you decide which data to access during hold the lock of mutex, but rust design 
+its mutex to embed data, you have to use the RAII object returned by lock
+method to access the data, thus impossible to mismatch the relationship between
+data and corresponding mutex. 
 
-at the time of writing (2021-07), support rust in kernel still being disuccessed in mailing thread,
-we can see if it can be accepted, and time will tell if rust really improved our development.
+There is a youtube video called
+[Rust, a language for next 40 years](https://www.youtube.com/watch?v=A3AdN7U24iU)
+shares a point: developers only migrate to new language if
+it is '10x better', and he considered rust as the '10x better' language and
+will replace C in low-level programming in the next 40 years. 
+another video [Is It Time to Rewrite OS in Rust?](https://www.youtube.com/watch?v=HgtRAbE1nBM)
+shares another point: kernel developers don't care about
+huge time spent on implementing correct behavior using err-prone 
+memory unsafe language, since once it's correctly implemented,
+it works for ever, so less error-prone language add little value to kernel
+development. At the time of writing (2021-08), support rust in kernel still 
+being disuccessed in kernel mailing thread, Let's wait and see if linux
+kernel will accept it, and only time will tell if rust is really shining.
+

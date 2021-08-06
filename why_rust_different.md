@@ -587,7 +587,7 @@ ref::~ComplexResource();
 How rust improve this ? Rust model reference perfectly with ownership/lifetime.
 Reference some variable implicitly the reference itself don't own
 the ownership of value, so it 'borrowed' ownership from
-original value (instead of own the ownership like move) temperaly, original
+original value (instead of own the ownership like move) temporary, original
 variable still owns the ownership, rust assume original variable must have longer
 lifetime than reference, so dangling reference is impossible
 
@@ -756,7 +756,7 @@ with less performance hit). And now we have rust and it omits
 many such bugs at build time instead of runtime, we should consider it
 as new low-level implementation language, seriously. 
 If still using C/C++, fighting with these countless low-level memory bugs
-may consume more time than to implement new features.
+may consume more time than to improve the ecosystem.
 
 Microsoft blog also shares similar point
 ```
